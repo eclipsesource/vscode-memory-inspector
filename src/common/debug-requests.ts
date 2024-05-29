@@ -25,6 +25,7 @@ export interface DebugRequestTypes {
     'scopes': [DebugProtocol.ScopesArguments, DebugProtocol.ScopesResponse['body']]
     'variables': [DebugProtocol.VariablesArguments, DebugProtocol.VariablesResponse['body']]
     'writeMemory': [DebugProtocol.WriteMemoryArguments, DebugProtocol.WriteMemoryResponse['body']]
+    'setDataBreakpoints': [DebugProtocol.SetDataBreakpointsArguments, DebugProtocol.SetDataBreakpointsResponse['body']]
 }
 
 export interface DebugEvents {

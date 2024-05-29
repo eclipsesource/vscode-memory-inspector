@@ -14,9 +14,11 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
+import { DebugProtocol } from '@vscode/debugprotocol';
 import * as vscode from 'vscode';
 import { Messenger } from 'vscode-messenger';
 import { WebviewIdMessageParticipant } from 'vscode-messenger-common';
+import { SetDataBreakpointsArguments, SetDataBreakpointsResult } from '../common/breakpoint';
 import * as manifest from '../common/manifest';
 import { VariableRange } from '../common/memory-range';
 import {
@@ -33,6 +35,7 @@ import {
     resetMemoryViewSettingsType,
     SessionContext,
     sessionContextChangedType,
+    setDataBreakpointType,
     setMemoryViewSettingsType,
     setOptionsType,
     setTitleType,
@@ -42,10 +45,12 @@ import {
     WebviewSelection,
     WriteMemoryArguments,
     WriteMemoryResult,
-    writeMemoryType,
+    writeMemoryType
 } from '../common/messaging';
 import { MemoryViewSettings, ScrollingBehavior } from '../common/webview-configuration';
-import { getVisibleColumns, isWebviewVariableContext, WebviewContext } from '../common/webview-context';
+import { getVisibleColumns, isWebviewGroupContext, isWebviewVariableContext, WebviewContext } from '../common/webview-context';
+import { BreakpointProvider } from './breakpoints/breakpoint-provider';
+import { BreakpointTracker } from './breakpoints/breakpoint-tracker';
 import { isVariablesContext } from './external-views';
 import { outputChannelLogger } from './logger';
 import { MemoryProvider } from './memory-provider';
@@ -67,12 +72,22 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
     public static ToggleRadixPrefixCommandType = `${manifest.PACKAGE_NAME}.toggle-radix-prefix`;
     public static ShowAdvancedDisplayConfigurationCommandType = `${manifest.PACKAGE_NAME}.show-advanced-display-options`;
     public static GetWebviewSelectionCommandType = `${manifest.PACKAGE_NAME}.get-webview-selection`;
+    public static SetDataBreakpointReadCommandType = `${manifest.PACKAGE_NAME}.data-breakpoint.set.read`;
+    public static SetDataBreakpointReadWriteCommandType = `${manifest.PACKAGE_NAME}.data-breakpoint.set.readWrite`;
+    public static SetDataBreakpointWriteCommandType = `${manifest.PACKAGE_NAME}.data-breakpoint.set.write`;
+    public static RemoveDataBreakpointCommandType = `${manifest.PACKAGE_NAME}.data-breakpoint.remove`;
+    public static RemoveAllDataBreakpointCommandType = `${manifest.PACKAGE_NAME}.data-breakpoint.remove-all`;
 
     protected messenger: Messenger;
 
     protected panelIndices: number = 1;
 
-    public constructor(protected extensionUri: vscode.Uri, protected memoryProvider: MemoryProvider, protected sessionTracker: SessionTracker) {
+    public constructor(
+        protected extensionUri: vscode.Uri,
+        protected memoryProvider: MemoryProvider,
+        protected sessionTracker: SessionTracker,
+        protected breakpointTracker: BreakpointTracker,
+        protected breakpointProvider: BreakpointProvider) {
         this.messenger = new Messenger();
     }
 
@@ -104,6 +119,14 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
                 this.messenger.sendNotification(showAdvancedOptionsType, ctx.messageParticipant, undefined);
             }),
             vscode.commands.registerCommand(MemoryWebview.GetWebviewSelectionCommandType, (ctx: WebviewContext) => this.getWebviewSelection(ctx.messageParticipant)),
+            vscode.commands.registerCommand(MemoryWebview.SetDataBreakpointReadCommandType, (ctx: WebviewContext) =>
+                this.onSetDataBreakpointCommand(ctx, 'read')),
+            vscode.commands.registerCommand(MemoryWebview.SetDataBreakpointWriteCommandType, (ctx: WebviewContext) =>
+                this.onSetDataBreakpointCommand(ctx, 'write')),
+            vscode.commands.registerCommand(MemoryWebview.SetDataBreakpointReadWriteCommandType, (ctx: WebviewContext) =>
+                this.onSetDataBreakpointCommand(ctx, 'readWrite')),
+            vscode.commands.registerCommand(MemoryWebview.RemoveDataBreakpointCommandType, (ctx: WebviewContext) => this.onRemoveDataBreakpointCommand(ctx)),
+            vscode.commands.registerCommand(MemoryWebview.RemoveAllDataBreakpointCommandType, (ctx: WebviewContext) => this.onRemoveDataBreakpointCommand(ctx, true)),
         );
     };
 
@@ -202,7 +225,13 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
             this.messenger.onNotification(setTitleType, title => { panel.title = title; }, { sender: participant }),
             this.messenger.onRequest(storeMemoryType, args => this.storeMemory(args), { sender: participant }),
             this.messenger.onRequest(applyMemoryType, () => this.applyMemory(), { sender: participant }),
-            this.sessionTracker.onSessionEvent(event => this.handleSessionEvent(participant, event))
+            this.breakpointTracker.onDataBreakpointChangedEvent(breakpoints => this.messenger.sendNotification(setDataBreakpointType, participant, breakpoints)),
+            this.sessionTracker.onSessionEvent(event => this.handleSessionEvent(participant, event)),
+            panel.onDidChangeViewState(view => {
+                if (view.webviewPanel.visible) {
+                    this.setDataBreakpoints(participant);
+                }
+            }),
         ];
         panel.onDidDispose(() => disposables.forEach(disposable => disposable.dispose()));
     }
@@ -210,6 +239,7 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
     protected async initialize(participant: WebviewIdMessageParticipant, panel: vscode.WebviewPanel, options?: MemoryOptions): Promise<void> {
         this.setSessionContext(participant, this.createContext());
         this.setInitialSettings(participant, panel.title);
+        this.setDataBreakpoints(participant);
         this.refresh(participant, options);
     }
 
@@ -227,6 +257,10 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
 
     protected setSessionContext(webviewParticipant: WebviewIdMessageParticipant, context: SessionContext): void {
         this.messenger.sendNotification(sessionContextChangedType, webviewParticipant, context);
+    }
+
+    protected setDataBreakpoints(webviewParticipant: WebviewIdMessageParticipant): void {
+        this.messenger.sendNotification(setDataBreakpointType, webviewParticipant, this.breakpointTracker.dataBreakpoints);
     }
 
     protected getMemoryViewSettings(messageParticipant: WebviewIdMessageParticipant, title: string): MemoryViewSettings {
@@ -301,6 +335,64 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
             this.logError('Error fetching variables', err);
             return [];
         }
+    }
+
+    protected async setDataBreakpoint(request: SetDataBreakpointsArguments): Promise<SetDataBreakpointsResult> {
+        try {
+            const result = await this.breakpointProvider.setMemoryInspectorDataBreakpoint(request);
+            return result;
+        } catch (err) {
+            return {
+                breakpoints: []
+            };
+        }
+    }
+
+    protected async onSetDataBreakpointCommand(ctx: WebviewContext, accessType: DebugProtocol.DataBreakpointAccessType): Promise<SetDataBreakpointsResult | undefined> {
+        console.log('Set Data Breakpoint', ctx);
+
+        let dataId: string | undefined = undefined;
+        if (isWebviewGroupContext(ctx)) {
+            dataId = ctx.memoryData.group.startAddress;
+        } else if (isWebviewVariableContext(ctx)) {
+            dataId = ctx.variable.name;
+        } else {
+            throw new Error(`WebviewContext needs to be a Group or Variable context. It was: ${JSON.stringify(ctx, undefined, 2)}`);
+        }
+
+        // Don't remove already existing breakpoints
+        const breakpoints = this.breakpointTracker.internalDataBreakpoints;
+
+        return this.setDataBreakpoint({
+            breakpoints: [
+                ...breakpoints,
+                {
+                    dataId,
+                    accessType,
+                }
+            ]
+        });
+    }
+
+    protected async onRemoveDataBreakpointCommand(ctx: WebviewContext, removeAll: boolean = false): Promise<SetDataBreakpointsResult | undefined> {
+        if (removeAll) {
+            return this.setDataBreakpoint({ breakpoints: [] });
+        }
+
+        let dataId: string | undefined = undefined;
+        if (isWebviewGroupContext(ctx)) {
+            dataId = ctx.memoryData.group.startAddress;
+        } else if (isWebviewVariableContext(ctx)) {
+            dataId = ctx.variable.name;
+        } else {
+            throw new Error(`WebviewContext needs to be a Group or Variable context. It was: ${JSON.stringify(ctx, undefined, 2)}`);
+        }
+
+        const breakpoints = this.breakpointTracker.internalDataBreakpoints.filter(bp => bp.dataId !== dataId);
+
+        return this.setDataBreakpoint({
+            breakpoints
+        });
     }
 
     protected getWebviewSelection(webviewParticipant: WebviewIdMessageParticipant): Promise<WebviewSelection> {

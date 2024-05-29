@@ -35,6 +35,7 @@ import {
     resetMemoryViewSettingsType,
     SessionContext,
     sessionContextChangedType,
+    setDataBreakpointType,
     setMemoryViewSettingsType,
     setOptionsType,
     setTitleType,
@@ -44,6 +45,7 @@ import {
 } from '../common/messaging';
 import { Change, hasChanged, hasChangedTo } from '../common/typescript';
 import { MemoryDisplayConfiguration } from '../common/webview-configuration';
+import { breakpointService } from './breakpoints/breakpoint-service';
 import { AddressColumn } from './columns/address-column';
 import { AsciiColumn } from './columns/ascii-column';
 import { columnContributionService, ColumnStatus } from './columns/column-contribution-service';
@@ -136,6 +138,10 @@ class App extends React.Component<{}, MemoryAppState> {
         messenger.onRequest(getWebviewSelectionType, () => this.getWebviewSelection());
         messenger.onNotification(showAdvancedOptionsType, () => this.showAdvancedOptions());
         messenger.sendNotification(readyType, HOST_EXTENSION, undefined);
+        messenger.onNotification(setDataBreakpointType, breakpoints => {
+            breakpointService.update(breakpoints);
+            this.forceUpdate();
+        });
         this.updatePeriodicRefresh();
     }
 

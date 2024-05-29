@@ -15,7 +15,8 @@
  ********************************************************************************/
 
 import { WebviewIdMessageParticipant } from 'vscode-messenger-common';
-import { Endianness, VariableMetadata } from './memory-range';
+import { Endianness } from './manifest';
+import { VariableMetadata } from './memory-range';
 import { ReadMemoryArguments } from './messaging';
 
 export interface WebviewContext {
@@ -36,6 +37,15 @@ export interface WebviewCellContext extends WebviewContext {
 
 export interface WebviewVariableContext extends WebviewCellContext {
     variable?: VariableMetadata
+}
+
+export interface WebviewGroupContext extends WebviewCellContext {
+    memoryData?: {
+        group: {
+            startAddress: string;
+            length: number;
+        }
+    }
 }
 
 /**
@@ -59,6 +69,14 @@ export function isWebviewContext(args: WebviewContext | unknown): args is Webvie
         && typeof assumed.webviewSection === 'string' && typeof assumed.showAsciiColumn === 'boolean' && typeof assumed.showVariablesColumn === 'boolean'
         && typeof assumed.showRadixPrefix === 'boolean' && typeof assumed.activeReadArguments?.count === 'number' && typeof assumed.activeReadArguments?.offset === 'number'
         && typeof assumed.activeReadArguments?.memoryReference === 'string';
+}
+
+export function isWebviewGroupContext(args: WebviewVariableContext | unknown): args is Required<WebviewGroupContext> {
+    const assumed = args ? args as WebviewGroupContext : undefined;
+    return !!assumed && isWebviewContext(args)
+        && !!assumed.memoryData
+        && (typeof assumed.memoryData.group.startAddress === 'string')
+        && (typeof assumed.memoryData.group.length === 'number');
 }
 
 export function isWebviewVariableContext(args: WebviewVariableContext | unknown): args is Required<WebviewVariableContext> {

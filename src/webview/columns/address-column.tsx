@@ -21,8 +21,10 @@ import { ColumnContribution, ColumnFittingType, TableRenderOptions } from './col
 
 export class AddressColumn implements ColumnContribution {
     static ID = 'address';
+    static CLASS_NAME = 'column-address';
 
     readonly id = AddressColumn.ID;
+    readonly className = AddressColumn.CLASS_NAME;
     readonly label = 'Address';
     readonly priority = 0;
 

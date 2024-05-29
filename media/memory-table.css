@@ -31,6 +31,30 @@
   border-bottom: 1px dotted var(--vscode-editorHoverWidget-border);
 }
 
+.memory-inspector-table .data-breakpoint {
+  outline: 1px solid var(--vscode-debugIcon-breakpointForeground);
+  outline-offset: 1px;
+}
+
+.memory-inspector-table .data-breakpoint.data-breakpoint-external {
+  outline-style: dashed;  
+}
+
+.memory-inspector-table tbody .column-address {
+  position: relative;
+}
+
+.memory-inspector-table tbody tr:has(.data-breakpoint) .column-address::before {
+  content: '';
+  border-radius: 100%;
+  height: 6px;
+  width: 6px;
+  background-color: var(--vscode-debugIcon-breakpointForeground);
+  position: absolute;
+  left: 4px;
+  top: calc(50% - 4px);
+}
+
 /* == MoreMemorySelect == */
 
 .bytes-select {

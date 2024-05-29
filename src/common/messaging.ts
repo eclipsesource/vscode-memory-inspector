@@ -18,6 +18,7 @@ import type { DebugProtocol } from '@vscode/debugprotocol';
 import type { NotificationType, RequestType } from 'vscode-messenger-common';
 import { URI } from 'vscode-uri';
 import { VariablesView } from '../plugin/external-views';
+import { DataBreakpoints } from './breakpoint';
 import { DebugRequestTypes } from './debug-requests';
 import type { VariableRange, WrittenMemory } from './memory-range';
 import { MemoryViewSettings } from './webview-configuration';
@@ -52,6 +53,7 @@ export const resetMemoryViewSettingsType: NotificationType<void> = { method: 're
 export const setTitleType: NotificationType<string> = { method: 'setTitle' };
 export const memoryWrittenType: NotificationType<WrittenMemory> = { method: 'memoryWritten' };
 export const sessionContextChangedType: NotificationType<SessionContext> = { method: 'sessionContextChanged' };
+export const setDataBreakpointType: NotificationType<DataBreakpoints> = { method: 'setDataBreakpoint' };
 
 // Requests
 export const setOptionsType: RequestType<MemoryOptions, void> = { method: 'setOptions' };

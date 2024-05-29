@@ -56,7 +56,7 @@ export interface SessionEvents {
     'active': ActiveSessionChangedEvent,
     'memory-written': SessionMemoryWrittenEvent,
     'continued': SessionContinuedEvent,
-    'stopped': SessionStoppedEvent
+    'stopped': SessionStoppedEvent,
 }
 
 export type DebugCapability = keyof DebugProtocol.Capabilities;
@@ -74,6 +74,10 @@ export class SessionTracker implements vscode.DebugAdapterTrackerFactory {
 
     private _onSessionEvent = new vscode.EventEmitter<SessionEvent>();
     public readonly onSessionEvent = this._onSessionEvent.event;
+    private _onSessionRequest = new vscode.EventEmitter<DebugProtocol.Request>();
+    public readonly onSessionRequest = this._onSessionRequest.event;
+    private _onSessionResponse = new vscode.EventEmitter<DebugProtocol.Response>();
+    public readonly onSessionResponse = this._onSessionResponse.event;
 
     activate(context: vscode.ExtensionContext): void {
         context.subscriptions.push(
@@ -120,12 +124,16 @@ export class SessionTracker implements vscode.DebugAdapterTrackerFactory {
     }
 
     protected willSendClientMessage(session: vscode.DebugSession, message: unknown): void {
+        console.log('[SEND] ==>', message);
         if (isDebugRequest('initialize', message)) {
             this.sessionInfo(session).clientCapabilities = message.arguments;
+        } else if (isDebugRequest('setDataBreakpoints', message)) {
+            this._onSessionRequest.fire(message);
         }
     }
 
     protected adapterMessageReceived(session: vscode.DebugSession, message: unknown): void {
+        console.log('[RECV] <==', message);
         if (isDebugResponse('initialize', message)) {
             this.sessionInfo(session).debugCapabilities = message.body;
         } else if (isDebugEvent('stopped', message)) {
@@ -136,6 +144,8 @@ export class SessionTracker implements vscode.DebugAdapterTrackerFactory {
             this.fireSessionEvent(session, 'continued', undefined);
         } else if (isDebugEvent('memory', message)) {
             this.fireSessionEvent(session, 'memory-written', message.body);
+        } else if (isDebugResponse('setDataBreakpoints', message)) {
+            this._onSessionResponse.fire(message);
         }
     }
 
