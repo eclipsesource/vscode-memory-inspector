@@ -16,16 +16,16 @@
 
 import { DebugProtocol } from '@vscode/debugprotocol';
 import * as vscode from 'vscode';
-import { SetDataBreakpointsResult, TrackedBreakpoint, TrackedBreakpoints } from '../../common/breakpoint';
+import { SetDataBreakpointsResult, TrackedDataBreakpoint, TrackedDataBreakpoints } from '../../common/breakpoint';
 import { isDebugRequest, isDebugResponse } from '../../common/debug-requests';
 import { isSessionEvent, SessionContinuedEvent, SessionEvent, SessionRequest, SessionResponse, SessionStoppedEvent, SessionTracker } from '../session-tracker';
 
 export class BreakpointTracker {
-    protected _dataBreakpoints: TrackedBreakpoints = { external: [], internal: [] };
+    protected _dataBreakpoints: TrackedDataBreakpoints = { external: [], internal: [] };
     protected _stoppedEvent?: SessionStoppedEvent;
     protected dataBreakpointsRequest: Record<number, DebugProtocol.SetDataBreakpointsRequest> = {};
 
-    protected _onBreakpointsChanged = new vscode.EventEmitter<TrackedBreakpoints>();
+    protected _onBreakpointsChanged = new vscode.EventEmitter<TrackedDataBreakpoints>();
     readonly onBreakpointChanged = this._onBreakpointsChanged.event;
 
     protected _onSetDataBreakpointResponse = new vscode.EventEmitter<DebugProtocol.SetDataBreakpointsResponse>();
@@ -39,15 +39,15 @@ export class BreakpointTracker {
 
     notifySetDataBreakpointEnabled = true;
 
-    get breakpoints(): TrackedBreakpoints {
+    get dataBreakpoints(): TrackedDataBreakpoints {
         return this._dataBreakpoints;
     }
 
-    get internalBreakpoints(): TrackedBreakpoint[] {
+    get internalDataBreakpoints(): TrackedDataBreakpoint[] {
         return this._dataBreakpoints.internal;
     }
 
-    get externalBreakpoints(): TrackedBreakpoint[] {
+    get externalDataBreakpoints(): TrackedDataBreakpoint[] {
         return this._dataBreakpoints.external;
     }
 
@@ -92,7 +92,7 @@ export class BreakpointTracker {
                     ...event.data,
                     body: {
                         ...event.data.body,
-                        hitBreakpointIds: this.externalBreakpoints.map(bp => bp.response.id ?? -1)
+                        hitBreakpointIds: this.externalDataBreakpoints.map(bp => bp.response.id ?? -1)
                     }
                 }
             };
@@ -152,6 +152,6 @@ export class BreakpointTracker {
     }
 
     protected fireDataBreakpoints(): void {
-        this._onBreakpointsChanged.fire(this.breakpoints);
+        this._onBreakpointsChanged.fire(this.dataBreakpoints);
     }
 }

@@ -17,7 +17,7 @@
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { DebugRequestTypes } from './debug-requests';
 
-export interface TrackedBreakpoint {
+export interface TrackedDataBreakpoint {
     type: TrackedBreakpointType;
     breakpoint: DebugProtocol.DataBreakpoint;
     /**
@@ -26,18 +26,20 @@ export interface TrackedBreakpoint {
     response: DebugProtocol.SetDataBreakpointsResponse['body']['breakpoints'][0]
 }
 
-export interface TrackedBreakpoints {
+export interface TrackedDataBreakpoints {
     /**
      * Breakpoints set from external contributors.
      */
-    external: TrackedBreakpoint[],
+    external: TrackedDataBreakpoint[],
     /**
      * Breakpoints set from us.
      */
-    internal: TrackedBreakpoint[]
+    internal: TrackedDataBreakpoint[]
 }
 
 export type TrackedBreakpointType = 'internal' | 'external';
 
+export type DataBreakpointInfoArguments = DebugRequestTypes['dataBreakpointInfo'][0];
+export type DataBreakpointInfoResult = DebugRequestTypes['dataBreakpointInfo'][1];
 export type SetDataBreakpointsArguments = DebugRequestTypes['setDataBreakpoints'][0];
 export type SetDataBreakpointsResult = DebugRequestTypes['setDataBreakpoints'][1];

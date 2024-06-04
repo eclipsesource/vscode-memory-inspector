@@ -16,8 +16,8 @@
 
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { TrackedBreakpoint, TrackedBreakpoints, TrackedBreakpointType } from '../../common/breakpoint';
-import { BigIntMemoryRange, BigIntVariableRange, doOverlap, toHexStringWithRadixMarker, VariableRange } from '../../common/memory-range';
+import { TrackedBreakpointType, TrackedDataBreakpoint, TrackedDataBreakpoints } from '../../common/breakpoint';
+import { BigIntMemoryRange, BigIntVariableRange, doOverlap, isWithin, toHexStringWithRadixMarker } from '../../common/memory-range';
 import { getVariablesType, notifyContinuedType, notifyStoppedType, setTrackedBreakpointType, StoppedEvent } from '../../common/messaging';
 import { EventEmitter } from '../utils/events';
 import { UpdateExecutor } from '../utils/view-types';
@@ -30,7 +30,7 @@ export interface BreakpointMetadata {
 }
 
 export class BreakpointService implements UpdateExecutor {
-    protected _breakpoints: TrackedBreakpoints = { external: [], internal: [] };
+    protected _breakpoints: TrackedDataBreakpoints = { external: [], internal: [] };
     protected _stoppedEvent?: StoppedEvent;
 
     protected variables: BigIntVariableRange[] = [];
@@ -38,11 +38,11 @@ export class BreakpointService implements UpdateExecutor {
     protected _onDidChange = new EventEmitter<void>();
     readonly onDidChange = this._onDidChange.event;
 
-    get breakpoints(): TrackedBreakpoints {
+    get breakpoints(): TrackedDataBreakpoints {
         return this._breakpoints;
     }
 
-    get allBreakpoints(): TrackedBreakpoint[] {
+    get allBreakpoints(): TrackedDataBreakpoint[] {
         return [...this.breakpoints.external, ...this.breakpoints.internal];
     }
 
@@ -77,22 +77,30 @@ export class BreakpointService implements UpdateExecutor {
             });
     }
 
-    findByDataId(dataId: string): TrackedBreakpoint | undefined {
+    findByDataId(dataId: string): TrackedDataBreakpoint | undefined {
         return [...this.breakpoints.external, ...this.breakpoints.internal].find(bp => bp.breakpoint.dataId === dataId);
     }
 
-    inRange(range: BigIntMemoryRange): TrackedBreakpoint[] {
+    inRange(range: BigIntMemoryRange): TrackedDataBreakpoint[] {
         const variables = this.findVariablesInRange(range);
-        return this.allBreakpoints.filter(bp =>
-            bp.breakpoint.dataId === toHexStringWithRadixMarker(range.startAddress) ||
-            variables.some(v => v.name === bp.breakpoint.dataId));
+        return this.allBreakpoints.filter(bp => {
+            let isInRange = false;
+            try {
+                const bigint = BigInt(bp.breakpoint.dataId);
+                isInRange = isWithin(bigint, range);
+            } catch (ex) {
+                // Nothing to do
+            }
+
+            return isInRange || variables.some(v => v.name === bp.breakpoint.dataId);
+        });
     }
 
     protected findVariablesInRange(range: BigIntMemoryRange): BigIntVariableRange[] {
         return this.variables.filter(v => doOverlap(v, range));
     }
 
-    isHit(breakpointOrDataId: TrackedBreakpoint | string): boolean {
+    isHit(breakpointOrDataId: TrackedDataBreakpoint | string): boolean {
         if (this.stoppedEvent === undefined ||
             this.stoppedEvent.body.hitBreakpointIds === undefined ||
             this.stoppedEvent.body.hitBreakpointIds.length === 0) {
@@ -103,7 +111,7 @@ export class BreakpointService implements UpdateExecutor {
         return !!bp?.response.id && this.stoppedEvent.body.hitBreakpointIds.includes(bp.response.id);
     }
 
-    metadata(breakpointOrDataId: TrackedBreakpoint | string): BreakpointMetadata | undefined {
+    metadata(breakpointOrDataId: TrackedDataBreakpoint | string): BreakpointMetadata | undefined {
         const bp = typeof breakpointOrDataId === 'string' ? this.findByDataId(breakpointOrDataId) : breakpointOrDataId;
 
         if (bp?.type === 'external') {

@@ -14,7 +14,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { SetDataBreakpointsArguments, SetDataBreakpointsResult } from '../../common/breakpoint';
+import { DataBreakpointInfoArguments, DataBreakpointInfoResult, SetDataBreakpointsArguments, SetDataBreakpointsResult } from '../../common/breakpoint';
 import { sendRequest } from '../../common/debug-requests';
 import { SessionTracker } from '../session-tracker';
 import { BreakpointTracker } from './breakpoint-tracker';
@@ -24,7 +24,7 @@ export class BreakpointProvider {
     constructor(protected readonly sessionTracker: SessionTracker, protected readonly breakpointTracker: BreakpointTracker) {
         this.breakpointTracker.onSetDataBreakpointResponse(() => {
             this.setMemoryInspectorDataBreakpoint({
-                breakpoints: this.breakpointTracker.internalBreakpoints.map(bp => bp.breakpoint)
+                breakpoints: this.breakpointTracker.internalDataBreakpoints.map(bp => bp.breakpoint)
             });
         });
     }
@@ -33,7 +33,7 @@ export class BreakpointProvider {
         const session = this.sessionTracker.assertDebugCapability(this.sessionTracker.activeSession, 'supportsDataBreakpoints', 'set data breakpoint');
         this.breakpointTracker.notifySetDataBreakpointEnabled = false;
         const breakpoints = [
-            ...this.breakpointTracker.externalBreakpoints.map(bp => bp.breakpoint),
+            ...this.breakpointTracker.externalDataBreakpoints.map(bp => bp.breakpoint),
             ...args.breakpoints];
         return sendRequest(session, 'setDataBreakpoints', { breakpoints })
             .then(response => {
@@ -43,5 +43,10 @@ export class BreakpointProvider {
             }).finally(() => {
                 this.breakpointTracker.notifySetDataBreakpointEnabled = true;
             });
+    }
+
+    async dataBreakpointInfo(args: DataBreakpointInfoArguments): Promise<DataBreakpointInfoResult> {
+        const session = this.sessionTracker.assertDebugCapability(this.sessionTracker.activeSession, 'supportsDataBreakpoints', 'data breakpoint info');
+        return sendRequest(session, 'dataBreakpointInfo', args);
     }
 }

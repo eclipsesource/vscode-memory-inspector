@@ -264,7 +264,7 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
     }
 
     protected setBreakpoints(webviewParticipant: WebviewIdMessageParticipant): void {
-        this.messenger.sendNotification(setTrackedBreakpointType, webviewParticipant, this.breakpointTracker.breakpoints);
+        this.messenger.sendNotification(setTrackedBreakpointType, webviewParticipant, this.breakpointTracker.dataBreakpoints);
         if (this.breakpointTracker.stoppedEvent) {
             this.messenger.sendNotification(notifyStoppedType, webviewParticipant, this.breakpointTracker.stoppedEvent.data);
         }
@@ -360,13 +360,20 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
         if (isWebviewGroupContext(ctx)) {
             dataId = ctx.memoryData.group.startAddress;
         } else if (isWebviewVariableContext(ctx)) {
-            dataId = ctx.variable.name;
+            const info = await this.breakpointProvider.dataBreakpointInfo({
+                name: ctx.variable.name,
+                variablesReference: ctx.variable.parentVariablesReference
+            });
+            if (!info.dataId) {
+                throw new Error(`DataBreakpointInfo returned for variable ${ctx.variable} an invalid info.`);
+            }
+            dataId = info.dataId;
         } else {
             throw new Error(`WebviewContext needs to be a Group or Variable context. It was: ${JSON.stringify(ctx, undefined, 2)}`);
         }
 
         // Don't remove already existing breakpoints
-        const breakpoints = this.breakpointTracker.internalBreakpoints.map(bp => bp.breakpoint);
+        const breakpoints = this.breakpointTracker.internalDataBreakpoints.map(bp => bp.breakpoint);
 
         return this.setDataBreakpoint({
             breakpoints: [
@@ -393,7 +400,7 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
             throw new Error(`WebviewContext needs to be a Group or Variable context. It was: ${JSON.stringify(ctx, undefined, 2)}`);
         }
 
-        const breakpoints = this.breakpointTracker.internalBreakpoints
+        const breakpoints = this.breakpointTracker.internalDataBreakpoints
             .filter(bp => bp.breakpoint.dataId !== dataId)
             .map(bp => bp.breakpoint);
 

@@ -66,8 +66,8 @@ export function createGroupVscodeContext(startAddress: bigint, length: number, b
 }
 
 export function createVariableVscodeContext(variable: BigIntVariableRange, breakpoint?: BreakpointMetadata): VscodeContext {
-    const { name, type, value, isPointer } = variable;
-    return createVscodeContext({ variable: { name, type, value, isPointer }, breakpoint: { ...breakpoint, isBreakable: true } });
+    const { name, type, value, parentVariablesReference, isPointer } = variable;
+    return createVscodeContext({ variable: { name, type, value, parentVariablesReference, isPointer }, breakpoint: { ...breakpoint, isBreakable: true } });
 }
 
 function replacerForBigInt(_: string, value: unknown): unknown {
