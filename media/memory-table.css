@@ -14,12 +14,12 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-.memory-inspector-table tr>th:not(.content-width-fit),
-.memory-inspector-table tr>td:not(.content-width-fit) {
+.memory-inspector-table tr > th:not(.content-width-fit),
+.memory-inspector-table tr > td:not(.content-width-fit) {
   min-width: 120px;
 }
 
-.memory-inspector-table tr>td {
+.memory-inspector-table tr > td {
   font-family: var(--vscode-editor-font-family);
 }
 
@@ -61,10 +61,12 @@
 }
 
 .memory-inspector-table tbody .address-status.codicon-debug-stackframe {
-  color: var(--vscode-debugIcon-breakpointCurrentStackframeForeground)
+  color: var(--vscode-debugIcon-breakpointCurrentStackframeForeground);
 }
 
-.memory-inspector-table tbody .address-status.codicon-debug-breakpoint.codicon-debug-stackframe:after {
+.memory-inspector-table
+  tbody
+  .address-status.codicon-debug-breakpoint.codicon-debug-stackframe:after {
   content: "\ea71";
   position: absolute;
   left: 3px;
@@ -135,7 +137,7 @@
 
 .memory-inspector-table span.p-column-resizer {
   border-right: 2px solid var(--vscode-editor-lineHighlightBorder);
-  transition: border-right .1s ease-out;
+  transition: border-right 0.1s ease-out;
 }
 
 .memory-inspector-table span.p-column-resizer:hover {
@@ -143,8 +145,7 @@
 }
 
 .memory-inspector-table .p-column-resizer-helper {
-  margin-top: 32px !important;
-  /* avoid overlap with top 'Load more' widget */
+  margin-top: 32px !important; /* avoid overlap with top 'Load more' widget */
   width: 2px;
 }
 
@@ -189,12 +190,12 @@
 }
 
 /* Colors for the hover fields */
-.memory-hover .label-value-pair>.label {
+.memory-hover .label-value-pair > .label {
   color: var(--vscode-debugTokenExpression-string);
   white-space: nowrap;
 }
 
-.memory-hover .label-value-pair>.value {
+.memory-hover .label-value-pair > .value {
   color: var(--vscode-debugTokenExpression-number);
 }
 
@@ -218,8 +219,7 @@
 .byte-group {
   font-family: var(--vscode-editor-font-family);
   margin-right: 2px;
-  padding: 0 1px;
-  /* we use this padding to balance out the 2px that are needed for the editing */
+  padding: 0 1px; /* we use this padding to balance out the 2px that are needed for the editing */
 }
 
 .byte-group:last-child {
@@ -229,8 +229,7 @@
 .byte-group:has(> .data-edit) {
   outline: 1px solid var(--vscode-inputOption-activeBorder);
   outline-offset: 1px;
-  padding: 0px;
-  /* editing takes two more pixels cause the input field will cut off the characters otherwise. */
+  padding: 0px; /* editing takes two more pixels cause the input field will cut off the characters otherwise. */
 }
 
 .data-edit {

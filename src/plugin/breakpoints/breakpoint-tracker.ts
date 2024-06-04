@@ -16,7 +16,7 @@
 
 import { DebugProtocol } from '@vscode/debugprotocol';
 import * as vscode from 'vscode';
-import { TrackedBreakpoint, TrackedBreakpoints } from '../../common/breakpoint';
+import { SetDataBreakpointsResult, TrackedBreakpoint, TrackedBreakpoints } from '../../common/breakpoint';
 import { isDebugRequest, isDebugResponse } from '../../common/debug-requests';
 import { isSessionEvent, SessionContinuedEvent, SessionEvent, SessionRequest, SessionResponse, SessionStoppedEvent, SessionTracker } from '../session-tracker';
 
@@ -61,11 +61,11 @@ export class BreakpointTracker {
         this.sessionTracker.onSessionResponse(event => this.onSessionResponse(event));
     }
 
-    setInternal(response: DebugProtocol.SetDataBreakpointsResponse['body']['breakpoints']): void {
+    setInternal(internalBreakpoints: SetDataBreakpointsResult['breakpoints']): void {
         this._dataBreakpoints.internal = [];
 
         const { external, internal } = this._dataBreakpoints;
-        const ids = response.map(bp => bp.id);
+        const ids = internalBreakpoints.map(bp => bp.id);
         for (let i = 0; i < external.length; i++) {
             const tbp = external[i];
             if (ids.includes(tbp.response.id)) {
@@ -84,6 +84,8 @@ export class BreakpointTracker {
         }
 
         if (isSessionEvent('stopped', event)) {
+            // TODO: Only for demo purposes
+            // Reason: The debugger does not set the hitBreakpointIds property
             const demoEvent: SessionStoppedEvent = {
                 ...event,
                 data: {
@@ -108,7 +110,6 @@ export class BreakpointTracker {
         }
 
         const { request } = event;
-
         if (isDebugRequest('setDataBreakpoints', request)) {
             this.dataBreakpointsRequest[request.seq] = request;
         }
@@ -120,7 +121,6 @@ export class BreakpointTracker {
         }
 
         const { response } = event;
-
         if (isDebugResponse('setDataBreakpoints', response)) {
             this._dataBreakpoints.external = [];
 

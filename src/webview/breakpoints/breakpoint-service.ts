@@ -50,7 +50,7 @@ export class BreakpointService implements UpdateExecutor {
         return this._stoppedEvent;
     }
 
-    init(): void {
+    activate(): void {
         messenger.onNotification(setTrackedBreakpointType, breakpoints => {
             this._breakpoints = breakpoints;
             this._onDidChange.fire();

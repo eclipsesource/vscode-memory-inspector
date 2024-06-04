@@ -356,8 +356,6 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
     }
 
     protected async onSetDataBreakpointCommand(ctx: WebviewContext, accessType: DebugProtocol.DataBreakpointAccessType): Promise<SetDataBreakpointsResult | undefined> {
-        console.log('Set Data Breakpoint', ctx);
-
         let dataId: string | undefined = undefined;
         if (isWebviewGroupContext(ctx)) {
             dataId = ctx.memoryData.group.startAddress;
