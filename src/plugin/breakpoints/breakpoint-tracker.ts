@@ -16,48 +16,47 @@
 
 import { DebugProtocol } from '@vscode/debugprotocol';
 import * as vscode from 'vscode';
-import { DataBreakpoints } from '../../common/breakpoint';
+import { TrackedBreakpoint, TrackedBreakpoints } from '../../common/breakpoint';
 import { isDebugRequest, isDebugResponse } from '../../common/debug-requests';
-import { SessionTracker } from '../session-tracker';
-
-export interface TrackedBreakpoint {
-    breakpoint: DebugProtocol.DataBreakpoint;
-    response: DebugProtocol.SetDataBreakpointsResponse['body']['breakpoints'][0]
-}
-
-export interface TrackedBreakpoints {
-    external: TrackedBreakpoint[],
-    internal: TrackedBreakpoint[]
-}
+import { isSessionEvent, SessionContinuedEvent, SessionEvent, SessionRequest, SessionResponse, SessionStoppedEvent, SessionTracker } from '../session-tracker';
 
 export class BreakpointTracker {
     protected _dataBreakpoints: TrackedBreakpoints = { external: [], internal: [] };
+    protected _stoppedEvent?: SessionStoppedEvent;
     protected dataBreakpointsRequest: Record<number, DebugProtocol.SetDataBreakpointsRequest> = {};
 
-    private onDataBreakpointsChanged = new vscode.EventEmitter<DataBreakpoints>();
-    readonly onDataBreakpointChangedEvent = this.onDataBreakpointsChanged.event;
+    protected _onBreakpointsChanged = new vscode.EventEmitter<TrackedBreakpoints>();
+    readonly onBreakpointChanged = this._onBreakpointsChanged.event;
 
-    private onSetDataBreakpointResponse = new vscode.EventEmitter<DebugProtocol.SetDataBreakpointsResponse>();
-    readonly onSetDataBreakpointResponseEvent = this.onSetDataBreakpointResponse.event;
+    protected _onSetDataBreakpointResponse = new vscode.EventEmitter<DebugProtocol.SetDataBreakpointsResponse>();
+    readonly onSetDataBreakpointResponse = this._onSetDataBreakpointResponse.event;
+
+    protected _onStopped = new vscode.EventEmitter<SessionStoppedEvent>();
+    readonly onStopped = this._onStopped.event;
+
+    protected _onContinued = new vscode.EventEmitter<SessionContinuedEvent>();
+    readonly onContinued = this._onContinued.event;
 
     notifySetDataBreakpointEnabled = true;
 
-    get dataBreakpoints(): DataBreakpoints {
-        return {
-            external: this.externalDataBreakpoints,
-            internal: this.internalDataBreakpoints
-        };
+    get breakpoints(): TrackedBreakpoints {
+        return this._dataBreakpoints;
     }
 
-    get internalDataBreakpoints(): DebugProtocol.DataBreakpoint[] {
-        return [...this._dataBreakpoints.internal.map(bp => bp.breakpoint)];
+    get internalBreakpoints(): TrackedBreakpoint[] {
+        return this._dataBreakpoints.internal;
     }
 
-    get externalDataBreakpoints(): DebugProtocol.DataBreakpoint[] {
-        return [...this._dataBreakpoints.external.map(bp => bp.breakpoint)];
+    get externalBreakpoints(): TrackedBreakpoint[] {
+        return this._dataBreakpoints.external;
+    }
+
+    get stoppedEvent(): SessionStoppedEvent | undefined {
+        return this._stoppedEvent;
     }
 
     constructor(protected sessionTracker: SessionTracker) {
+        this.sessionTracker.onSessionEvent(event => this.onSessionEvent(event));
         this.sessionTracker.onSessionRequest(event => this.onSessionRequest(event));
         this.sessionTracker.onSessionResponse(event => this.onSessionResponse(event));
     }
@@ -70,6 +69,7 @@ export class BreakpointTracker {
         for (let i = 0; i < external.length; i++) {
             const tbp = external[i];
             if (ids.includes(tbp.response.id)) {
+                tbp.type = 'internal';
                 internal.push(tbp);
             }
         }
@@ -78,35 +78,64 @@ export class BreakpointTracker {
         this.fireDataBreakpoints();
     }
 
-    protected onSessionRequest(event: DebugProtocol.Request): void {
+    protected onSessionEvent(event: SessionEvent): void {
         if (!this.sessionTracker.isActive) {
             return;
         }
 
-        if (isDebugRequest('setDataBreakpoints', event)) {
-            this.dataBreakpointsRequest[event.seq] = event;
+        if (isSessionEvent('stopped', event)) {
+            const demoEvent: SessionStoppedEvent = {
+                ...event,
+                data: {
+                    ...event.data,
+                    body: {
+                        ...event.data.body,
+                        hitBreakpointIds: this.externalBreakpoints.map(bp => bp.response.id ?? -1)
+                    }
+                }
+            };
+            this._stoppedEvent = demoEvent;
+            this._onStopped.fire(demoEvent);
+        } else if (isSessionEvent('continued', event)) {
+            this._stoppedEvent = undefined;
+            this._onContinued.fire(event);
         }
     }
 
-    protected onSessionResponse(event: DebugProtocol.Response): void {
+    protected onSessionRequest(event: SessionRequest): void {
         if (!this.sessionTracker.isActive) {
             return;
         }
 
-        if (isDebugResponse('setDataBreakpoints', event)) {
+        const { request } = event;
+
+        if (isDebugRequest('setDataBreakpoints', request)) {
+            this.dataBreakpointsRequest[request.seq] = request;
+        }
+    }
+
+    protected onSessionResponse(event: SessionResponse): void {
+        if (!this.sessionTracker.isActive) {
+            return;
+        }
+
+        const { response } = event;
+
+        if (isDebugResponse('setDataBreakpoints', response)) {
             this._dataBreakpoints.external = [];
 
             const { external } = this._dataBreakpoints;
 
-            const request = this.dataBreakpointsRequest[event.request_seq];
+            const request = this.dataBreakpointsRequest[response.request_seq];
             if (request) {
-                if (event.success) {
-                    for (let i = 0; i < event.body.breakpoints.length; i++) {
-                        const response = event.body.breakpoints[i];
-                        if (response.verified) {
+                if (response.success) {
+                    for (let i = 0; i < response.body.breakpoints.length; i++) {
+                        const bpResponse = response.body.breakpoints[i];
+                        if (bpResponse.verified) {
                             external.push({
+                                type: 'external',
                                 breakpoint: request.arguments.breakpoints[i],
-                                response
+                                response: bpResponse
                             });
                         }
                     }
@@ -116,13 +145,13 @@ export class BreakpointTracker {
             }
 
             if (this.notifySetDataBreakpointEnabled) {
-                this.onSetDataBreakpointResponse.fire(event);
+                this._onSetDataBreakpointResponse.fire(response);
                 this.fireDataBreakpoints();
             }
         }
     }
 
     protected fireDataBreakpoints(): void {
-        this.onDataBreakpointsChanged.fire(this.dataBreakpoints);
+        this._onBreakpointsChanged.fire(this.breakpoints);
     }
 }

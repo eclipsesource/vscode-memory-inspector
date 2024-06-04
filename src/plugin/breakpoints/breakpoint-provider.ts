@@ -22,9 +22,9 @@ import { BreakpointTracker } from './breakpoint-tracker';
 export class BreakpointProvider {
 
     constructor(protected readonly sessionTracker: SessionTracker, protected readonly breakpointTracker: BreakpointTracker) {
-        this.breakpointTracker.onSetDataBreakpointResponseEvent(() => {
+        this.breakpointTracker.onSetDataBreakpointResponse(() => {
             this.setMemoryInspectorDataBreakpoint({
-                breakpoints: this.breakpointTracker.internalDataBreakpoints
+                breakpoints: this.breakpointTracker.internalBreakpoints.map(bp => bp.breakpoint)
             });
         });
     }
@@ -33,7 +33,7 @@ export class BreakpointProvider {
         const session = this.sessionTracker.assertDebugCapability(this.sessionTracker.activeSession, 'supportsDataBreakpoints', 'set data breakpoint');
         this.breakpointTracker.notifySetDataBreakpointEnabled = false;
         const breakpoints = [
-            ...this.breakpointTracker.externalDataBreakpoints,
+            ...this.breakpointTracker.externalBreakpoints.map(bp => bp.breakpoint),
             ...args.breakpoints];
         return sendRequest(session, 'setDataBreakpoints', { breakpoints })
             .then(response => {

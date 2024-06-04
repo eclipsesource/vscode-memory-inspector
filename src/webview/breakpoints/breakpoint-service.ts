@@ -14,35 +14,109 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { DataBreakpoints, TrackedBreakpointType } from '../../common/breakpoint';
+import { DebugProtocol } from '@vscode/debugprotocol';
+import { HOST_EXTENSION } from 'vscode-messenger-common';
+import { TrackedBreakpoint, TrackedBreakpoints, TrackedBreakpointType } from '../../common/breakpoint';
+import { BigIntMemoryRange, BigIntVariableRange, doOverlap, toHexStringWithRadixMarker, VariableRange } from '../../common/memory-range';
+import { getVariablesType, notifyContinuedType, notifyStoppedType, setTrackedBreakpointType, StoppedEvent } from '../../common/messaging';
+import { EventEmitter } from '../utils/events';
+import { UpdateExecutor } from '../utils/view-types';
+import { messenger } from '../view-messenger';
 
 export interface BreakpointMetadata {
-    type?: TrackedBreakpointType,
+    id?: number;
+    type: TrackedBreakpointType,
+    isHit: boolean;
 }
 
-export class BreakpointService {
-    protected dataBreakpoints: DataBreakpoints = { external: [], internal: [] };
+export class BreakpointService implements UpdateExecutor {
+    protected _breakpoints: TrackedBreakpoints = { external: [], internal: [] };
+    protected _stoppedEvent?: StoppedEvent;
 
-    update(dataBreakpoints: DataBreakpoints): void {
-        this.dataBreakpoints = dataBreakpoints;
+    protected variables: BigIntVariableRange[] = [];
+
+    protected _onDidChange = new EventEmitter<void>();
+    readonly onDidChange = this._onDidChange.event;
+
+    get breakpoints(): TrackedBreakpoints {
+        return this._breakpoints;
     }
 
-    isExternal(dataId: string): boolean {
-        return this.dataBreakpoints.external.some(bp => bp.dataId === dataId);
+    get allBreakpoints(): TrackedBreakpoint[] {
+        return [...this.breakpoints.external, ...this.breakpoints.internal];
     }
 
-    isInternal(dataId: string): boolean {
-        return this.dataBreakpoints.internal.some(bp => bp.dataId === dataId);
+    get stoppedEvent(): StoppedEvent | undefined {
+        return this._stoppedEvent;
     }
 
-    metadata(dataId: string): BreakpointMetadata | undefined {
-        if (this.isExternal(dataId)) {
+    init(): void {
+        messenger.onNotification(setTrackedBreakpointType, breakpoints => {
+            this._breakpoints = breakpoints;
+            this._onDidChange.fire();
+        });
+        messenger.onNotification(notifyStoppedType, event => {
+            this._stoppedEvent = event;
+            this._onDidChange.fire();
+        });
+        messenger.onNotification(notifyContinuedType, () => {
+            this._stoppedEvent = undefined;
+            this._onDidChange.fire();
+        });
+    }
+
+    async fetchData(currentViewParameters: DebugProtocol.ReadMemoryArguments): Promise<void> {
+        this.variables = (await messenger.sendRequest(getVariablesType, HOST_EXTENSION, currentViewParameters))
+            .map<BigIntVariableRange>(transmissible => {
+                const startAddress = BigInt(transmissible.startAddress);
+                return {
+                    ...transmissible,
+                    startAddress,
+                    endAddress: transmissible.endAddress ? BigInt(transmissible.endAddress) : startAddress + BigInt(1)
+                };
+            });
+    }
+
+    findByDataId(dataId: string): TrackedBreakpoint | undefined {
+        return [...this.breakpoints.external, ...this.breakpoints.internal].find(bp => bp.breakpoint.dataId === dataId);
+    }
+
+    inRange(range: BigIntMemoryRange): TrackedBreakpoint[] {
+        const variables = this.findVariablesInRange(range);
+        return this.allBreakpoints.filter(bp =>
+            bp.breakpoint.dataId === toHexStringWithRadixMarker(range.startAddress) ||
+            variables.some(v => v.name === bp.breakpoint.dataId));
+    }
+
+    protected findVariablesInRange(range: BigIntMemoryRange): BigIntVariableRange[] {
+        return this.variables.filter(v => doOverlap(v, range));
+    }
+
+    isHit(breakpointOrDataId: TrackedBreakpoint | string): boolean {
+        if (this.stoppedEvent === undefined ||
+            this.stoppedEvent.body.hitBreakpointIds === undefined ||
+            this.stoppedEvent.body.hitBreakpointIds.length === 0) {
+            return false;
+        }
+
+        const bp = typeof breakpointOrDataId === 'string' ? this.findByDataId(breakpointOrDataId) : breakpointOrDataId;
+        return !!bp?.response.id && this.stoppedEvent.body.hitBreakpointIds.includes(bp.response.id);
+    }
+
+    metadata(breakpointOrDataId: TrackedBreakpoint | string): BreakpointMetadata | undefined {
+        const bp = typeof breakpointOrDataId === 'string' ? this.findByDataId(breakpointOrDataId) : breakpointOrDataId;
+
+        if (bp?.type === 'external') {
             return {
-                type: 'external'
+                id: bp.response.id,
+                type: 'external',
+                isHit: this.isHit(breakpointOrDataId)
             };
-        } else if (this.isInternal(dataId)) {
+        } else if (bp?.type === 'internal') {
             return {
-                type: 'internal'
+                id: bp.response.id,
+                type: 'internal',
+                isHit: this.isHit(breakpointOrDataId)
             };
         }
 
@@ -54,21 +128,39 @@ export namespace BreakpointService {
     export namespace style {
         export const dataBreakpoint = 'data-breakpoint';
         export const dataBreakpointExternal = 'data-breakpoint-external';
+        export const debugHit = 'debug-hit';
     }
-}
 
-export function breakpointClassNames(metadata?: BreakpointMetadata): string[] {
-    const classes: string[] = [];
+    export function inlineClasses(metadata?: BreakpointMetadata): string[] {
+        const classes: string[] = [];
 
-    if (metadata) {
-        if (metadata.type === 'external') {
-            classes.push(BreakpointService.style.dataBreakpoint, BreakpointService.style.dataBreakpointExternal);
-        } else if (metadata.type === 'internal') {
-            classes.push(BreakpointService.style.dataBreakpoint);
+        if (metadata) {
+            if (metadata.type === 'external') {
+                classes.push(BreakpointService.style.dataBreakpoint, BreakpointService.style.dataBreakpointExternal);
+            } else if (metadata.type === 'internal') {
+                classes.push(BreakpointService.style.dataBreakpoint);
+            }
+
+            if (metadata.isHit) {
+                classes.push(BreakpointService.style.debugHit);
+            }
         }
+
+        return classes;
     }
 
-    return classes;
+    export function statusClasses(metadata: BreakpointMetadata[]): string[] {
+        const classes: string[] = [];
+
+        if (metadata.length > 0) {
+            classes.push('codicon', 'codicon-debug-breakpoint');
+            if (metadata.some(m => m.isHit)) {
+                classes.push('codicon-debug-stackframe');
+            }
+        }
+
+        return classes;
+    }
 }
 
 export const breakpointService = new BreakpointService();

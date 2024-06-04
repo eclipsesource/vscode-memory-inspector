@@ -21,7 +21,7 @@ import { HOST_EXTENSION } from 'vscode-messenger-common';
 import { areVariablesEqual, BigIntMemoryRange, BigIntVariableRange, compareBigInt, doOverlap } from '../../common/memory-range';
 import { getVariablesType, ReadMemoryArguments } from '../../common/messaging';
 import { stringifyWithBigInts } from '../../common/typescript';
-import { breakpointClassNames, breakpointService } from '../breakpoints/breakpoint-service';
+import { BreakpointService, breakpointService } from '../breakpoints/breakpoint-service';
 import { ColumnContribution } from '../columns/column-contribution-service';
 import { Decorator } from '../decorations/decoration-service';
 import { EventEmitter, IEvent } from '../utils/events';
@@ -86,7 +86,7 @@ export class VariableDecorator implements ColumnContribution, Decorator {
             result.push(React.createElement('span', {
                 style: { color: current.color },
                 key: current.variable.name,
-                className: classNames('hoverable', ...breakpointClassNames(breakpointMetadata)),
+                className: classNames('hoverable', ...BreakpointService.inlineClasses(breakpointMetadata)),
                 'data-column': 'variables',
                 'data-variables': stringifyWithBigInts(current.variable),
                 ...createVariableVscodeContext(current.variable, breakpointMetadata)

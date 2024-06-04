@@ -35,7 +35,6 @@ import {
     resetMemoryViewSettingsType,
     SessionContext,
     sessionContextChangedType,
-    setDataBreakpointType,
     setMemoryViewSettingsType,
     setOptionsType,
     setTitleType,
@@ -138,10 +137,8 @@ class App extends React.Component<{}, MemoryAppState> {
         messenger.onRequest(getWebviewSelectionType, () => this.getWebviewSelection());
         messenger.onNotification(showAdvancedOptionsType, () => this.showAdvancedOptions());
         messenger.sendNotification(readyType, HOST_EXTENSION, undefined);
-        messenger.onNotification(setDataBreakpointType, breakpoints => {
-            breakpointService.update(breakpoints);
-            this.forceUpdate();
-        });
+        breakpointService.init();
+        breakpointService.onDidChange(() => this.forceUpdate());
         this.updatePeriodicRefresh();
     }
 
@@ -299,7 +296,10 @@ class App extends React.Component<{}, MemoryAppState> {
         try {
             const response = await messenger.sendRequest(readMemoryType, HOST_EXTENSION, memoryOptions);
             await Promise.all(Array.from(
-                new Set(columnContributionService.getUpdateExecutors().concat(decorationService.getUpdateExecutors())),
+                new Set(columnContributionService
+                    .getUpdateExecutors()
+                    .concat(decorationService.getUpdateExecutors())
+                    .concat(breakpointService)),
                 executor => executor.fetchData(memoryOptions)
             ));
 

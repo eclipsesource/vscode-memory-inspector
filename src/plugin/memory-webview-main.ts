@@ -28,6 +28,8 @@ import {
     logMessageType,
     MemoryOptions,
     memoryWrittenType,
+    notifyContinuedType,
+    notifyStoppedType,
     ReadMemoryArguments,
     ReadMemoryResult,
     readMemoryType,
@@ -35,10 +37,10 @@ import {
     resetMemoryViewSettingsType,
     SessionContext,
     sessionContextChangedType,
-    setDataBreakpointType,
     setMemoryViewSettingsType,
     setOptionsType,
     setTitleType,
+    setTrackedBreakpointType,
     showAdvancedOptionsType,
     StoreMemoryArguments,
     storeMemoryType,
@@ -225,11 +227,13 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
             this.messenger.onNotification(setTitleType, title => { panel.title = title; }, { sender: participant }),
             this.messenger.onRequest(storeMemoryType, args => this.storeMemory(args), { sender: participant }),
             this.messenger.onRequest(applyMemoryType, () => this.applyMemory(), { sender: participant }),
-            this.breakpointTracker.onDataBreakpointChangedEvent(breakpoints => this.messenger.sendNotification(setDataBreakpointType, participant, breakpoints)),
+            this.breakpointTracker.onBreakpointChanged(breakpoints => this.messenger.sendNotification(setTrackedBreakpointType, participant, breakpoints)),
+            this.breakpointTracker.onStopped(event => this.messenger.sendNotification(notifyStoppedType, participant, event.data)),
+            this.breakpointTracker.onContinued(event => this.messenger.sendNotification(notifyContinuedType, participant, event.data)),
             this.sessionTracker.onSessionEvent(event => this.handleSessionEvent(participant, event)),
             panel.onDidChangeViewState(view => {
                 if (view.webviewPanel.visible) {
-                    this.setDataBreakpoints(participant);
+                    this.setBreakpoints(participant);
                 }
             }),
         ];
@@ -239,7 +243,7 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
     protected async initialize(participant: WebviewIdMessageParticipant, panel: vscode.WebviewPanel, options?: MemoryOptions): Promise<void> {
         this.setSessionContext(participant, this.createContext());
         this.setInitialSettings(participant, panel.title);
-        this.setDataBreakpoints(participant);
+        this.setBreakpoints(participant);
         this.refresh(participant, options);
     }
 
@@ -259,8 +263,11 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
         this.messenger.sendNotification(sessionContextChangedType, webviewParticipant, context);
     }
 
-    protected setDataBreakpoints(webviewParticipant: WebviewIdMessageParticipant): void {
-        this.messenger.sendNotification(setDataBreakpointType, webviewParticipant, this.breakpointTracker.dataBreakpoints);
+    protected setBreakpoints(webviewParticipant: WebviewIdMessageParticipant): void {
+        this.messenger.sendNotification(setTrackedBreakpointType, webviewParticipant, this.breakpointTracker.breakpoints);
+        if (this.breakpointTracker.stoppedEvent) {
+            this.messenger.sendNotification(notifyStoppedType, webviewParticipant, this.breakpointTracker.stoppedEvent.data);
+        }
     }
 
     protected getMemoryViewSettings(messageParticipant: WebviewIdMessageParticipant, title: string): MemoryViewSettings {
@@ -361,7 +368,7 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
         }
 
         // Don't remove already existing breakpoints
-        const breakpoints = this.breakpointTracker.internalDataBreakpoints;
+        const breakpoints = this.breakpointTracker.internalBreakpoints.map(bp => bp.breakpoint);
 
         return this.setDataBreakpoint({
             breakpoints: [
@@ -388,7 +395,9 @@ export class MemoryWebview implements vscode.CustomReadonlyEditorProvider {
             throw new Error(`WebviewContext needs to be a Group or Variable context. It was: ${JSON.stringify(ctx, undefined, 2)}`);
         }
 
-        const breakpoints = this.breakpointTracker.internalDataBreakpoints.filter(bp => bp.dataId !== dataId);
+        const breakpoints = this.breakpointTracker.internalBreakpoints
+            .filter(bp => bp.breakpoint.dataId !== dataId)
+            .map(bp => bp.breakpoint);
 
         return this.setDataBreakpoint({
             breakpoints
