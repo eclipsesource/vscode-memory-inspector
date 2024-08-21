@@ -14,15 +14,13 @@
  * SPDX-License-Identifier: EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0
  ********************************************************************************/
 
-import { classNames } from 'primereact/utils';
-import { ReactNode } from 'react';
 import * as React from 'react';
+import { ReactNode } from 'react';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import * as manifest from '../../common/manifest';
 import { areVariablesEqual, BigIntMemoryRange, BigIntVariableRange, compareBigInt, doOverlap } from '../../common/memory-range';
 import { getVariablesType, ReadMemoryArguments } from '../../common/messaging';
 import { stringifyWithBigInts } from '../../common/typescript';
-import { BreakpointService, breakpointService } from '../breakpoints/breakpoint-service';
 import { ColumnContribution, ColumnRenderProps } from '../columns/column-contribution-service';
 import { createDefaultSelection, groupAttributes, SelectionProps } from '../columns/table-group';
 import { MemoryRowData } from '../components/memory-table';
@@ -92,14 +90,13 @@ export class VariableDecorator implements ColumnContribution, Decorator {
         const variables = this.getVariablesInRange(row);
         return variables?.reduce<ReactNode[]>((result, current, index) => {
             if (index > 0) { result.push(', '); }
-            const breakpointMetadata = breakpointService.metadata(current.variable.name);
             result.push(React.createElement('span', {
                 style: { color: current.color },
                 key: current.variable.name,
-                className: classNames('hoverable', ...BreakpointService.inlineClasses(breakpointMetadata)),
+                className: 'hoverable',
                 'data-column': 'variables',
                 'data-variables': stringifyWithBigInts(current.variable),
-                ...createVariableVscodeContext(current.variable, breakpointMetadata),
+                ...createVariableVscodeContext(current.variable),
                 ...groupAttributes({ columnIndex, rowIndex: row.rowIndex, groupIndex: index, maxGroupIndex: variables.length - 1 }, selectionProps)
             }, current.variable.name));
             return result;

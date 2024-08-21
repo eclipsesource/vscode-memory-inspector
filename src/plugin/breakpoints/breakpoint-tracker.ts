@@ -20,6 +20,12 @@ import { SetDataBreakpointsResult, TrackedDataBreakpoint, TrackedDataBreakpoints
 import { isDebugRequest, isDebugResponse } from '../../common/debug-requests';
 import { isSessionEvent, SessionContinuedEvent, SessionEvent, SessionRequest, SessionResponse, SessionStoppedEvent, SessionTracker } from '../session-tracker';
 
+/**
+ * Tracks data breakpoints and provides events for changes.
+ *
+ * Currently the webview part is disabled and does not react to the changes.
+ * It will be enabled again after VSCode extends the breakpoint API.
+ */
 export class BreakpointTracker {
     protected _dataBreakpoints: TrackedDataBreakpoints = { external: [], internal: [] };
     protected _stoppedEvent?: SessionStoppedEvent;
@@ -84,20 +90,8 @@ export class BreakpointTracker {
         }
 
         if (isSessionEvent('stopped', event)) {
-            // TODO: Only for demo purposes
-            // Reason: The debugger does not set the hitBreakpointIds property
-            const demoEvent: SessionStoppedEvent = {
-                ...event,
-                data: {
-                    ...event.data,
-                    body: {
-                        ...event.data.body,
-                        hitBreakpointIds: this.externalDataBreakpoints.map(bp => bp.response.id ?? -1)
-                    }
-                }
-            };
-            this._stoppedEvent = demoEvent;
-            this._onStopped.fire(demoEvent);
+            this._stoppedEvent = event;
+            this._onStopped.fire(event);
         } else if (isSessionEvent('continued', event)) {
             this._stoppedEvent = undefined;
             this._onContinued.fire(event);

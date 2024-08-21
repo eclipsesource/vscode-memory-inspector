@@ -22,7 +22,6 @@ import { HOST_EXTENSION } from 'vscode-messenger-common';
 import { Memory } from '../../common/memory';
 import { BigIntMemoryRange, isWithin, toHexStringWithRadixMarker, toOffset } from '../../common/memory-range';
 import { writeMemoryType } from '../../common/messaging';
-import { BreakpointService, breakpointService } from '../breakpoints/breakpoint-service';
 import type { MemoryRowData, MemorySizeOptions, MemoryTableSelection, MemoryTableState } from '../components/memory-table';
 import { decorationService } from '../decorations/decoration-service';
 import { Disposable, FullNodeAttributes } from '../utils/view-types';
@@ -156,11 +155,10 @@ export class EditableDataColumnRow extends React.Component<EditableDataColumnRow
             groupIndex: idx,
             maxGroupIndex: this.props.config.groupsPerRowToRender - 1
         }, this.selectionProps);
-        const breakpointMetadata = breakpointService.metadata(toHexStringWithRadixMarker(startAddress));
 
         return <span
             tabIndex={0}
-            className={classNames('byte-group', 'hoverable', ...BreakpointService.inlineClasses(breakpointMetadata))}
+            className={classNames('byte-group', 'hoverable')}
             data-column='data'
             {...groupProps}
             data-range-start={startAddress}
@@ -168,7 +166,7 @@ export class EditableDataColumnRow extends React.Component<EditableDataColumnRow
             key={startAddress.toString(16)}
             onKeyDown={this.onKeyDown}
             onDoubleClick={this.setGroupEdit}
-            {...createGroupVscodeContext(startAddress, toOffset(startAddress, endAddress, config.tableConfig.bytesPerMau * 8), breakpointMetadata)}
+            {...createGroupVscodeContext(startAddress, toOffset(startAddress, endAddress, config.tableConfig.bytesPerMau * 8))}
         >
             {maus}
         </span>;

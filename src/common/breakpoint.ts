@@ -23,9 +23,12 @@ export interface TrackedDataBreakpoint {
     /**
      * The respective response for the breakpoint.
      */
-    response: DebugProtocol.SetDataBreakpointsResponse['body']['breakpoints'][0]
+    response: DebugProtocol.Breakpoint;
 }
 
+/**
+ * Temp. workaround till we have a proper API for this within VSCode.
+ */
 export interface TrackedDataBreakpoints {
     /**
      * Breakpoints set from external contributors.
@@ -37,6 +40,9 @@ export interface TrackedDataBreakpoints {
     internal: TrackedDataBreakpoint[]
 }
 
+/**
+ * Temp. workaround till we have a proper API for this within VSCode.
+ */
 export type TrackedBreakpointType = 'internal' | 'external';
 
 export type DataBreakpointInfoArguments = DebugRequestTypes['dataBreakpointInfo'][0];

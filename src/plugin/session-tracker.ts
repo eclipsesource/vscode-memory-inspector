@@ -145,8 +145,6 @@ export class SessionTracker implements vscode.DebugAdapterTrackerFactory {
     }
 
     protected willSendClientMessage(session: vscode.DebugSession, message: unknown): void {
-        // TODO: ONLY FOR DEMO PURPOSES
-        console.log('[SEND] ==>', message);
         if (isDebugRequest('initialize', message)) {
             this.sessionInfo(session).clientCapabilities = message.arguments;
         }
@@ -157,8 +155,6 @@ export class SessionTracker implements vscode.DebugAdapterTrackerFactory {
     }
 
     protected adapterMessageReceived(session: vscode.DebugSession, message: unknown): void {
-        // TODO: ONLY FOR DEMO PURPOSES
-        console.log('[RECV] <==', message);
         if (isDebugResponse('initialize', message)) {
             this.sessionInfo(session).debugCapabilities = message.body;
         } else if (isDebugEvent('stopped', message)) {
